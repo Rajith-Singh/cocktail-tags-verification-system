@@ -3,65 +3,64 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/Auth.php';
 
 $auth = new Auth();
-$message = '';
-$messageType = '';
 
-// Redirect if already logged in
+// Redirect to dashboard if already logged in
 if ($auth->isLoggedIn()) {
     header('Location: dashboard.php');
     exit;
 }
 
+$message = '';
+$messageType = '';
+
 // Handle registration
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $email = trim($_POST['email'] ?? '');
-    $fullName = trim($_POST['full_name'] ?? '');
     $password = $_POST['password'] ?? '';
-    $passwordConfirm = $_POST['password_confirm'] ?? '';
-    $expertiseLevel = $_POST['expertise_level'] ?? 'bartender';
-    $specialty = trim($_POST['specialty'] ?? '');
+    $confirmPassword = $_POST['confirm_password'] ?? '';
+    $fullName = trim($_POST['full_name'] ?? '');
+    $agreeTerms = isset($_POST['agree_terms']);
     
     // Validation
-    $errors = [];
-    
-    if (strlen($username) < 3) $errors[] = "Username must be at least 3 characters";
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Invalid email format";
-    if (strlen($fullName) < 3) $errors[] = "Full name is required";
-    if (strlen($password) < 8) $errors[] = "Password must be at least 8 characters";
-    if ($password !== $passwordConfirm) $errors[] = "Passwords do not match";
-    
-    if (empty($errors)) {
+    if (empty($username) || empty($email) || empty($password) || empty($fullName)) {
+        $message = "All fields are required";
+        $messageType = "danger";
+    } elseif (strlen($password) < 8) {
+        $message = "Password must be at least 8 characters";
+        $messageType = "danger";
+    } elseif ($password !== $confirmPassword) {
+        $message = "Passwords do not match";
+        $messageType = "danger";
+    } elseif (!$agreeTerms) {
+        $message = "You must agree to the Privacy Policy and Terms of Service";
+        $messageType = "danger";
+    } else {
         try {
             $result = $auth->registerExpert([
                 'username' => $username,
                 'email' => $email,
-                'full_name' => $fullName,
                 'password' => $password,
-                'expertise_level' => $expertiseLevel,
-                'specialty_tags' => $specialty
+                'full_name' => $fullName
             ]);
             
             if ($result['success']) {
-                $message = "Registration successful! Please log in.";
+                $message = "Registration successful! Redirecting to login...";
                 $messageType = "success";
                 // Redirect after 2 seconds
-                header('refresh:2;url=login.php');
+                header("refresh:2;url=login.php");
             } else {
-                $message = $result['message'] ?? "Registration failed";
+                $message = $result['message'];
                 $messageType = "danger";
             }
         } catch (Exception $e) {
             $message = $e->getMessage();
             $messageType = "danger";
         }
-    } else {
-        $message = implode("<br>", $errors);
-        $messageType = "danger";
     }
 }
 
-$pageTitle = "Register - Domain Expert";
+$pageTitle = "Register - Expert Verification";
 include __DIR__ . '/../templates/header.php';
 ?>
 
@@ -71,112 +70,234 @@ include __DIR__ . '/../templates/header.php';
             <div class="glass-card p-5 rounded-lg">
                 <div class="text-center mb-4">
                     <div class="mb-3">
-                        <i class="fas fa-flask-vial fa-4x" style="color: var(--primary);"></i>
+                        <i class="fas fa-user-plus fa-4x" style="color: var(--primary);"></i>
                     </div>
-                    <h2 class="fw-bold mb-2">Register as Expert</h2>
-                    <p class="text-muted">Join our cocktail verification community</p>
+                    <h2 class="fw-bold mb-2">Create Account</h2>
+                    <p class="text-muted">Join our expert verification community</p>
                 </div>
                 
                 <?php if ($message): ?>
                 <div class="alert alert-<?php echo $messageType; ?> alert-dismissible fade show mb-4">
-                    <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?> me-2"></i>
-                    <?php echo $message; ?>
+                    <i class="fas fa-<?php echo $messageType === 'danger' ? 'exclamation-circle' : 'check-circle'; ?> me-2"></i>
+                    <?php echo h($message); ?>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
                 <?php endif; ?>
                 
                 <form method="POST" action="">
                     <div class="mb-3">
+                        <label class="form-label fw-bold">Full Name</label>
+                        <input type="text" class="form-control form-control-lg" name="full_name" 
+                               value="<?php echo h($_POST['full_name'] ?? ''); ?>" 
+                               required placeholder="Enter your full name">
+                    </div>
+                    
+                    <div class="mb-3">
                         <label class="form-label fw-bold">Username</label>
-                        <input type="text" class="form-control" name="username" 
-                               value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>" 
-                               required placeholder="Your unique username">
-                        <small class="text-muted">3-50 characters, letters and numbers only</small>
+                        <input type="text" class="form-control form-control-lg" name="username" 
+                               value="<?php echo h($_POST['username'] ?? ''); ?>" 
+                               required placeholder="Choose a unique username">
                     </div>
                     
                     <div class="mb-3">
                         <label class="form-label fw-bold">Email Address</label>
-                        <input type="email" class="form-control" name="email" 
-                               value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>" 
-                               required placeholder="your.email@example.com">
-                        <small class="text-muted">We'll never share your email</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Full Name</label>
-                        <input type="text" class="form-control" name="full_name" 
-                               value="<?php echo htmlspecialchars($_POST['full_name'] ?? ''); ?>" 
-                               required placeholder="Your full name">
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Expertise Level</label>
-                                <select class="form-select" name="expertise_level">
-                                    <option value="trainee">Trainee Bartender</option>
-                                    <option value="bartender" selected>Bartender</option>
-                                    <option value="senior">Senior Bartender</option>
-                                    <option value="head_bartender">Head Bartender</option>
-                                    <option value="mixologist">Mixologist</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Specialty</label>
-                                <input type="text" class="form-control" name="specialty" 
-                                       value="<?php echo htmlspecialchars($_POST['specialty'] ?? ''); ?>" 
-                                       placeholder="e.g., Gin cocktails, Spirits">
-                            </div>
-                        </div>
+                        <input type="email" class="form-control form-control-lg" name="email" 
+                               value="<?php echo h($_POST['email'] ?? ''); ?>" 
+                               required placeholder="Enter your email">
                     </div>
                     
                     <div class="mb-3">
                         <label class="form-label fw-bold">Password</label>
-                        <input type="password" class="form-control" name="password" 
-                               required placeholder="Minimum 8 characters">
-                        <small class="text-muted">Must include uppercase, lowercase, number, and symbol</small>
+                        <input type="password" class="form-control form-control-lg" name="password" 
+                               required placeholder="Create a strong password">
+                        <small class="text-muted d-block mt-1">
+                            Minimum 8 characters with uppercase, lowercase, numbers, and symbols
+                        </small>
                     </div>
                     
                     <div class="mb-4">
                         <label class="form-label fw-bold">Confirm Password</label>
-                        <input type="password" class="form-control" name="password_confirm" 
-                               required placeholder="Repeat your password">
+                        <input type="password" class="form-control form-control-lg" name="confirm_password" 
+                               required placeholder="Re-enter your password">
                     </div>
                     
                     <div class="form-check mb-4">
-                        <input class="form-check-input" type="checkbox" id="agreeTerms" required>
+                        <input class="form-check-input" type="checkbox" name="agree_terms" 
+                               id="agreeTerms" required>
                         <label class="form-check-label" for="agreeTerms">
-                            I agree to the Terms of Service and Privacy Policy
+                            I agree to the 
+                            <a href="#" class="fw-bold text-primary" data-bs-toggle="modal" 
+                               data-bs-target="#privacyPolicyModal" onclick="return false;">
+                                Privacy Policy
+                            </a> 
+                            and 
+                            <a href="#" class="fw-bold text-primary" data-bs-toggle="modal" 
+                               data-bs-target="#termsOfServiceModal" onclick="return false;">
+                                Terms of Service
+                            </a>
                         </label>
                     </div>
                     
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="fas fa-user-plus me-2"></i>Create Account
+                            <i class="fas fa-user-check me-2"></i>Create Account
                         </button>
                     </div>
                     
                     <div class="text-center mt-4">
                         <p class="text-muted">Already have an account? 
-                            <a href="login.php" class="fw-bold">Sign in here</a>
+                            <a href="login.php" class="fw-bold">Login here</a>
                         </p>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Privacy Policy Modal -->
+<div class="modal fade" id="privacyPolicyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content glass-card">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-shield-alt me-2"></i>Privacy Policy
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="fw-bold mb-3">1. Information We Collect</h6>
+                <p class="text-muted mb-4">
+                    We collect information you provide directly, such as when you create an account. This includes:
+                </p>
+                <ul class="text-muted mb-4">
+                    <li>Full name, email address, and username</li>
+                    <li>Password and authentication information</li>
+                    <li>Verification activities and tag verification history</li>
+                    <li>User profile information and preferences</li>
+                </ul>
                 
-                <hr class="my-4">
+                <h6 class="fw-bold mb-3">2. How We Use Your Information</h6>
+                <p class="text-muted mb-4">
+                    We use the information we collect to:
+                </p>
+                <ul class="text-muted mb-4">
+                    <li>Provide, maintain, and improve our services</li>
+                    <li>Create and manage your account</li>
+                    <li>Track your verification activities and statistics</li>
+                    <li>Send you service-related notifications</li>
+                    <li>Prevent fraud and ensure security</li>
+                </ul>
                 
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>Why Register?</strong>
-                    <ul class="mb-0 mt-2">
-                        <li>Track your verification contributions</li>
-                        <li>Earn expert badges and achievements</li>
-                        <li>Access exclusive analytics</li>
-                        <li>Join the bartender community</li>
-                    </ul>
+                <h6 class="fw-bold mb-3">3. Data Security</h6>
+                <p class="text-muted mb-4">
+                    We implement appropriate security measures to protect your personal information from unauthorized access, alteration, disclosure, or destruction. 
+                    All passwords are encrypted using bcrypt hashing.
+                </p>
+                
+                <h6 class="fw-bold mb-3">4. Data Sharing</h6>
+                <p class="text-muted mb-4">
+                    We do not sell, trade, or rent your personal information to third parties. Your data is only used for the purposes outlined in this policy.
+                </p>
+                
+                <h6 class="fw-bold mb-3">5. Cookies</h6>
+                <p class="text-muted mb-4">
+                    We use cookies and similar technologies to enhance your browsing experience and remember your preferences. 
+                    You can control cookie settings through your browser.
+                </p>
+                
+                <h6 class="fw-bold mb-3">6. Your Rights</h6>
+                <p class="text-muted mb-4">
+                    You have the right to access, update, or delete your personal information at any time. 
+                    Contact us for assistance with these requests.
+                </p>
+                
+                <h6 class="fw-bold mb-3">7. Policy Changes</h6>
+                <p class="text-muted mb-0">
+                    We may update this Privacy Policy periodically. We will notify you of any significant changes by updating the "Last Updated" date.
+                </p>
+                
+                <div class="alert alert-info mt-4">
+                    <small><strong>Last Updated:</strong> <?php echo date('F d, Y'); ?></small>
                 </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">I Understand</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Terms of Service Modal -->
+<div class="modal fade" id="termsOfServiceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content glass-card">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-file-contract me-2"></i>Terms of Service
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="fw-bold mb-3">1. Acceptance of Terms</h6>
+                <p class="text-muted mb-4">
+                    By accessing and using this Cocktail Verification System, you accept and agree to be bound by the terms and provision of this agreement.
+                </p>
+                
+                <h6 class="fw-bold mb-3">2. User Responsibilities</h6>
+                <p class="text-muted mb-4">
+                    You are responsible for maintaining the confidentiality of your account and password and for restricting access to your computer. 
+                    You agree to accept responsibility for all activities that occur under your account.
+                </p>
+                
+                <h6 class="fw-bold mb-3">3. User Conduct</h6>
+                <p class="text-muted mb-4">
+                    You agree not to:
+                </p>
+                <ul class="text-muted mb-4">
+                    <li>Harass or cause distress to other users</li>
+                    <li>Submit false or misleading verification data</li>
+                    <li>Attempt to gain unauthorized access to the system</li>
+                    <li>Disrupt the normal flow of dialogue or data transmission</li>
+                    <li>Violate any applicable laws or regulations</li>
+                </ul>
+                
+                <h6 class="fw-bold mb-3">4. Intellectual Property Rights</h6>
+                <p class="text-muted mb-4">
+                    The content, features, and functionality of the Cocktail Verification System are owned by us, our licensors, 
+                    or other providers of such material and are protected by copyright laws.
+                </p>
+                
+                <h6 class="fw-bold mb-3">5. Disclaimer of Warranties</h6>
+                <p class="text-muted mb-4">
+                    The Cocktail Verification System is provided on an "AS-IS" basis. We make no warranties, expressed or implied, 
+                    regarding its operation or the information, content, or materials included on the system.
+                </p>
+                
+                <h6 class="fw-bold mb-3">6. Limitation of Liability</h6>
+                <p class="text-muted mb-4">
+                    In no event shall we be liable for any direct, indirect, incidental, special, consequential or punitive damages 
+                    arising out of or relating to your use of the system.
+                </p>
+                
+                <h6 class="fw-bold mb-3">7. Termination</h6>
+                <p class="text-muted mb-4">
+                    We reserve the right to terminate your account and access to the system if you violate these terms of service 
+                    or engage in conduct that we deem harmful to other users or the integrity of the system.
+                </p>
+                
+                <h6 class="fw-bold mb-3">8. Governing Law</h6>
+                <p class="text-muted mb-0">
+                    These terms and conditions are governed by and construed in accordance with applicable laws, 
+                    and you irrevocably submit to the exclusive jurisdiction of the courts in that location.
+                </p>
+                
+                <div class="alert alert-info mt-4">
+                    <small><strong>Last Updated:</strong> <?php echo date('F d, Y'); ?></small>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">I Accept</button>
             </div>
         </div>
     </div>

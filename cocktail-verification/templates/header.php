@@ -232,6 +232,28 @@ $expert = isLoggedIn() ? (new Auth())->getCurrentExpert() : null;
             text-decoration: none;
         }
         
+        /* Footer adjustment for sidebar */
+        @media (max-width: 768px) {
+            footer {
+                margin-left: 0 !important;
+            }
+        }
+        
+        /* Ensure footer stays full width */
+        footer {
+            transition: margin-left var(--transition);
+        }
+        
+        /* Modal styling */
+        .modal-content {
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .modal-header {
+            background: rgba(139, 92, 246, 0.05);
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar {

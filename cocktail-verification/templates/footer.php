@@ -1,8 +1,7 @@
 </div> <!-- End main-content -->
-    </div> <!-- End container-fluid -->
 
     <!-- Footer -->
-    <footer class="mt-5 py-4" style="background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); border-top: 1px solid rgba(255, 255, 255, 0.1);">
+    <footer class="mt-5 py-4" style="background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); border-top: 1px solid rgba(255, 255, 255, 0.1); margin-left: <?php echo (isLoggedIn() && basename($_SERVER['PHP_SELF']) !== 'index.php' && basename($_SERVER['PHP_SELF']) !== 'login.php' && basename($_SERVER['PHP_SELF']) !== 'register.php') ? 'var(--sidebar-width, 250px)' : '0'; ?>;">
         <div class="container-fluid">
             <div class="row">
                 <div class="col-md-4 mb-4 mb-md-0">
@@ -13,16 +12,16 @@
                         Collaborative cocktail tag verification platform for AI research and bartender community.
                     </p>
                     <div class="d-flex gap-2">
-                        <a href="#" class="btn btn-sm btn-outline-light">
+                        <a href="#" class="btn btn-sm btn-outline-light" title="Facebook">
                             <i class="fab fa-facebook-f"></i>
                         </a>
-                        <a href="#" class="btn btn-sm btn-outline-light">
+                        <a href="#" class="btn btn-sm btn-outline-light" title="Twitter">
                             <i class="fab fa-twitter"></i>
                         </a>
-                        <a href="#" class="btn btn-sm btn-outline-light">
+                        <a href="#" class="btn btn-sm btn-outline-light" title="LinkedIn">
                             <i class="fab fa-linkedin-in"></i>
                         </a>
-                        <a href="#" class="btn btn-sm btn-outline-light">
+                        <a href="#" class="btn btn-sm btn-outline-light" title="Instagram">
                             <i class="fab fa-instagram"></i>
                         </a>
                     </div>
@@ -53,8 +52,14 @@
                 <div class="col-md-2">
                     <h6 class="fw-bold mb-3" style="color: white;">Legal</h6>
                     <ul class="list-unstyled" style="color: rgba(255, 255, 255, 0.7);">
-                        <li class="mb-2"><a href="#" class="text-decoration-none">Privacy Policy</a></li>
-                        <li class="mb-2"><a href="#" class="text-decoration-none">Terms of Service</a></li>
+                        <li class="mb-2">
+                            <a href="#" data-bs-toggle="modal" data-bs-target="#privacyPolicyModal" 
+                               class="text-decoration-none">Privacy Policy</a>
+                        </li>
+                        <li class="mb-2">
+                            <a href="#" data-bs-toggle="modal" data-bs-target="#termsOfServiceModal" 
+                               class="text-decoration-none">Terms of Service</a>
+                        </li>
                         <li class="mb-2"><a href="#" class="text-decoration-none">Cookie Policy</a></li>
                         <li class="mb-2"><a href="#" class="text-decoration-none">Contact</a></li>
                     </ul>
@@ -63,7 +68,7 @@
                 <div class="col-md-2">
                     <h6 class="fw-bold mb-3" style="color: white;">Version</h6>
                     <p style="color: rgba(255, 255, 255, 0.7);">
-                        <small>v1.0.0</small><br>
+                        <small>v<?php echo APP_VERSION; ?></small><br>
                         <small>Last Updated: <?php echo date('F Y'); ?></small>
                     </p>
                 </div>
@@ -93,7 +98,7 @@
     <!-- Custom JS -->
     <script src="<?php echo ASSETS_PATH; ?>js/main.js"></script>
     
-    <?php if (isLoggedIn() && $currentPage === 'verify.php'): ?>
+    <?php if (isLoggedIn() && basename($_SERVER['PHP_SELF']) === 'verify.php'): ?>
     <script src="<?php echo ASSETS_PATH; ?>js/verification.js"></script>
     <?php endif; ?>
     
@@ -116,6 +121,7 @@
         // Smooth scrolling for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
+                if (this.getAttribute('data-bs-toggle') === 'modal') return;
                 e.preventDefault();
                 const target = document.querySelector(this.getAttribute('href'));
                 if (target) {
