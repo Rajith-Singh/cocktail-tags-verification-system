@@ -24,6 +24,12 @@ $suggestedTags = [
         ['name' => 'RainyDay', 'icon' => '🌧️', 'color' => '#95A5A6'],
         ['name' => 'SunnyDay', 'icon' => '🌞', 'color' => '#FFD93D'],
     ],
+    'time_of_day' => [
+        ['name' => 'Morning', 'icon' => '🌅', 'color' => '#FFA500'],
+        ['name' => 'Afternoon', 'icon' => '🏙️', 'color' => '#4169E1'],
+        ['name' => 'Evening', 'icon' => '🌆', 'color' => '#9370DB'],
+        ['name' => 'Night', 'icon' => '🌃', 'color' => '#191970'],
+    ],
     'season' => [
         ['name' => 'Spring', 'icon' => '🌸', 'color' => '#FF69B4'],
         ['name' => 'Summer', 'icon' => '☀️', 'color' => '#FFA500'],
@@ -449,6 +455,35 @@ include __DIR__ . '/../templates/header.php';
                                     <input type="checkbox" name="selected_tags[]" 
                                            value="<?php echo h($tag['name']); ?>" class="suggested-checkbox weather-check"
                                            data-category="weather">
+                                    <span class="suggested-tag-btn" style="--tag-color: <?php echo h($tag['color']); ?>">
+                                        <span class="tag-icon"><?php echo $tag['icon']; ?></span>
+                                        <span class="tag-text"><?php echo h($tag['name']); ?></span>
+                                    </span>
+                                </label>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Time of Day Tags (Required) -->
+                    <div class="suggested-section mb-4">
+                        <div class="section-header">
+                            <div class="section-title">
+                                <div class="section-icon">🕒</div>
+                                <div>
+                                    <h6 class="fw-bold mb-0">Time of Day</h6>
+                                    <small class="text-muted">When is this cocktail best enjoyed?</small>
+                                </div>
+                            </div>
+                            <span class="badge bg-danger">Required</span>
+                        </div>
+                        <div class="suggested-tags-grid">
+                            <?php if (isset($suggestedTags['time_of_day']) && is_array($suggestedTags['time_of_day'])): ?>
+                                <?php foreach ($suggestedTags['time_of_day'] as $tag): ?>
+                                <label class="suggested-tag-label">
+                                    <input type="checkbox" name="selected_tags[]" 
+                                           value="<?php echo h($tag['name']); ?>" class="suggested-checkbox time-check"
+                                           data-category="time_of_day">
                                     <span class="suggested-tag-btn" style="--tag-color: <?php echo h($tag['color']); ?>">
                                         <span class="tag-icon"><?php echo $tag['icon']; ?></span>
                                         <span class="tag-text"><?php echo h($tag['name']); ?></span>
@@ -1042,92 +1077,10 @@ function updateVerifyButton() {
         '<i class="fas fa-check-circle me-1"></i>Verify Selected';
 }
 
-// Suggested tags functions
-function toggleCategory(category) {
-    const checkboxes = document.querySelectorAll(`.suggested-checkbox.${category}`);
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-    
-    checkboxes.forEach(cb => cb.checked = !allChecked);
-    updateSelectedCount();
-}
-
-function selectAllTags() {
-    document.querySelectorAll('.suggested-checkbox').forEach(cb => cb.checked = true);
-    updateSelectedCount();
-}
-
-function deselectAllTags() {
-    document.querySelectorAll('.suggested-checkbox').forEach(cb => cb.checked = false);
-    updateSelectedCount();
-}
-
-function selectRequiredOnly() {
-    // Deselect all first
-    deselectAllTags();
-    // Select weather and mood tags only
-    document.querySelectorAll('.suggested-checkbox.weather, .suggested-checkbox.mood').forEach(cb => cb.checked = true);
-    updateSelectedCount();
-}
-
-function selectWeatherOnly() {
-    // Deselect all first
-    deselectAllTags();
-    // Select weather tags only
-    document.querySelectorAll('.suggested-checkbox.weather').forEach(cb => cb.checked = true);
-    updateSelectedCount();
-}
-
-function selectMoodOnly() {
-    // Deselect all first
-    deselectAllTags();
-    // Select mood tags only
-    document.querySelectorAll('.suggested-checkbox.mood').forEach(cb => cb.checked = true);
-    updateSelectedCount();
-}
-
-function updateSelectedCount() {
-    const checkboxes = document.querySelectorAll('.suggested-checkbox:checked');
-    const count = checkboxes.length;
-    const btn = document.getElementById('addSuggestedBtn');
-    const countSpan = document.getElementById('selectedCount');
-    
-    btn.disabled = count === 0;
-    countSpan.textContent = count;
-    
-    // Check if required tags are selected
-    const weatherSelected = document.querySelectorAll('.suggested-checkbox.weather:checked').length > 0;
-    const moodSelected = document.querySelectorAll('.suggested-checkbox.mood:checked').length > 0;
-    
-    if (!weatherSelected || !moodSelected) {
-        btn.innerHTML = `<i class="fas fa-exclamation-circle me-2"></i>Add Selected Tags (<span id="selectedCount">${count}</span>) - Missing Required`;
-        btn.classList.add('btn-warning');
-        btn.classList.remove('btn-primary');
-    } else {
-        btn.innerHTML = `<i class="fas fa-plus-circle me-2"></i>Add Selected Tags (<span id="selectedCount">${count}</span>)`;
-        btn.classList.add('btn-primary');
-        btn.classList.remove('btn-warning');
-    }
-}
-
-// Event listeners for pending tags
-document.querySelectorAll('.pending-tag-checkbox').forEach(cb => {
-    cb.addEventListener('change', updateVerifyButton);
-});
-
-// Event listeners for suggested tags
-document.querySelectorAll('.suggested-checkbox').forEach(cb => {
-    cb.addEventListener('change', updateSelectedCount);
-});
-
-// Initialize counts on page load
-document.addEventListener('DOMContentLoaded', function() {
-    updateVerifyButton();
-    updateSelectedCount();
-});
-
 // Suggested tags validation
 function updateAddSuggestedButton() {
     const requiredWeather = document.querySelectorAll('.weather-check:checked').length;
+    const requiredTime = document.querySelectorAll('.time-check:checked').length;
     const requiredMood = document.querySelectorAll('.mood-check:checked').length;
     const totalSelected = document.querySelectorAll('.suggested-checkbox:checked').length;
     const btn = document.getElementById('addSuggestedBtn');
@@ -1139,11 +1092,11 @@ function updateAddSuggestedButton() {
     tagCountText.textContent = totalSelected;
     selectedCount.textContent = totalSelected;
     
-    const isValid = requiredWeather > 0 && requiredMood > 0;
+    const isValid = requiredWeather > 0 && requiredTime > 0 && requiredMood > 0;
     
     if (!isValid && totalSelected > 0) {
         validationMessage.style.display = 'block';
-        validationText.textContent = `Select at least one Weather and one Mood tag (Weather: ${requiredWeather}/1, Mood: ${requiredMood}/1)`;
+        validationText.textContent = `Select at least one Weather, one Time of Day, and one Mood tag (Weather: ${requiredWeather}/1, Time: ${requiredTime}/1, Mood: ${requiredMood}/1)`;
     } else {
         validationMessage.style.display = 'none';
     }
@@ -1152,8 +1105,20 @@ function updateAddSuggestedButton() {
     btn.style.opacity = isValid ? '1' : '0.5';
 }
 
+// Event listeners for pending tags
+document.querySelectorAll('.pending-tag-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateVerifyButton);
+});
+
+// Event listeners for suggested tags
 document.querySelectorAll('.suggested-checkbox').forEach(cb => {
     cb.addEventListener('change', updateAddSuggestedButton);
+});
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateVerifyButton();
+    updateAddSuggestedButton();
 });
 </script>
 
