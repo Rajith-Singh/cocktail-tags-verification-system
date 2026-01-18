@@ -1,14 +1,16 @@
 <?php
 // Database configuration - WITH DEBUG MODE
-// define('DB_HOST', getenv('DB_HOST') ?: '185.187.241.1');
-// define('DB_USER', getenv('DB_USER') ?: 'u974801020_sys_testing');
-// define('DB_PASS', getenv('DB_PASS') ?: 'ig!T^P?G7');
-// define('DB_NAME', getenv('DB_NAME') ?: 'u974801020_testing');
+
+// define('DB_HOST', '185.187.241.1');
+// define('DB_NAME', 'u974801020_cocktail_ai');
+// define('DB_USER', 'u974801020_system_admin');
+// define('DB_PASS', 'error404@PHP');
 
 define('DB_HOST', '185.187.241.1');
-define('DB_NAME', 'u974801020_cocktail_ai');
-define('DB_USER', 'u974801020_system_admin');
+define('DB_NAME', 'u974801020_tagTest');
+define('DB_USER', 'u974801020_test_tag');
 define('DB_PASS', 'error404@PHP');
+
 define('DB_PORT', getenv('DB_PORT') ?: 3306);
 define('DB_DEBUG', true);
 

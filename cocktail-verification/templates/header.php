@@ -340,14 +340,20 @@ $expert = isLoggedIn() ? (new Auth())->getCurrentExpert() : null;
                             <i class="fas fa-check-circle"></i> Verify Tags
                             <?php 
                             try {
-                                $cocktailManager = new CocktailManager();
-                                $stats = $cocktailManager->getCocktailStats();
-                                $pendingTags = ($stats['total_tags'] ?? 0) - ($stats['verified_tags'] ?? 0);
-                                if ($pendingTags > 0): ?>
-                                <span class="badge bg-danger ms-auto"><?php echo $pendingTags; ?></span>
+                                $pdo = getDB();
+                                $stmt = $pdo->query("
+                                    SELECT COUNT(*) as pending_count 
+                                    FROM cocktail_tags 
+                                    WHERE status = 'pending'
+                                ");
+                                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                                $pendingCount = $result['pending_count'] ?? 0;
+                                
+                                if ($pendingCount > 0): ?>
+                                <span class="badge bg-danger ms-auto"><?php echo $pendingCount; ?></span>
                                 <?php endif;
                             } catch (Exception $e) {
-                                error_log("Error getting cocktail stats: " . $e->getMessage());
+                                error_log("Error getting pending tags count: " . $e->getMessage());
                             }
                             ?>
                         </a>

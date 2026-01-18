@@ -16,6 +16,9 @@ $cocktailId = $_GET['cocktail'] ?? null;
 $message = '';
 $messageType = '';
 
+// Get database connection
+$pdo = getDB();
+
 // Define suggested tags BEFORE header include
 $suggestedTags = [
     'weather' => [
@@ -129,74 +132,274 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         try {
             switch ($action) {
-                case 'verify_all':
-                    // Bulk verify all pending tags
+                case 'verify_pending':
+                    // Bulk verify selected pending tags
+                    $cocktail_tags_to_verify = isset($_POST['pending_tags']) && is_array($_POST['pending_tags']) ? $_POST['pending_tags'] : [];
                     $tags_verified = 0;
-                    $pending_tags = $_POST['pending_tags'] ?? [];
+                    $tags_failed = [];
                     
-                    foreach ($pending_tags as $tag_id) {
-                        try {
-                            $tagManager->verifyTag($tag_id, $expert['id'], 100, "Bulk verified");
-                            $tags_verified++;
-                        } catch (Exception $e) {
-                            error_log("Error verifying tag $tag_id: " . $e->getMessage());
-                        }
+                    if (empty($cocktail_tags_to_verify)) {
+                        throw new Exception("No tags selected for verification");
                     }
                     
-                    $message = "Successfully verified $tags_verified tags!";
-                    $messageType = "success";
+                    // Start transaction
+                    $pdo->beginTransaction();
+                    
+                    try {
+                        foreach ($cocktail_tags_to_verify as $cocktail_tag_id) {
+                            try {
+                                // Sanitize cocktail_tag_id (this is cocktail_tags.id)
+                                $cocktail_tag_id = (int)$cocktail_tag_id;
+                                
+                                if ($cocktail_tag_id <= 0) {
+                                    $tags_failed[] = "Invalid tag ID: $cocktail_tag_id";
+                                    continue;
+                                }
+                                
+                                // Get tag details before verifying - use cocktail_tags.id
+                                $tagStmt = $pdo->prepare("
+                                    SELECT ct.id, ct.tag_id, t.tag_name, ct.cocktail_id, ct.status
+                                    FROM cocktail_tags ct
+                                    JOIN tags t ON ct.tag_id = t.id
+                                    WHERE ct.id = ? AND ct.cocktail_id = ?
+                                ");
+                                $tagStmt->execute([$cocktail_tag_id, $cocktailId]);
+                                $tagData = $tagStmt->fetch(PDO::FETCH_ASSOC);
+                                
+                                if (!$tagData) {
+                                    $tags_failed[] = "Tag not found: ID $cocktail_tag_id";
+                                    continue;
+                                }
+                                
+                                // Only verify if currently pending
+                                if ($tagData['status'] !== 'pending') {
+                                    $tags_failed[] = "{$tagData['tag_name']} is already " . $tagData['status'];
+                                    continue;
+                                }
+                                
+                                // Update cocktail_tags status to verified using ct.id
+                                $updateStmt = $pdo->prepare("
+                                    UPDATE cocktail_tags 
+                                    SET 
+                                        status = 'verified',
+                                        verified_by = ?,
+                                        verified_at = NOW(),
+                                        confidence_score = 100,
+                                        verification_notes = ?
+                                    WHERE id = ?
+                                ");
+                                
+                                $notes = "Bulk verified by " . $expert['full_name'];
+                                $updateStmt->execute([
+                                    $expert['id'],
+                                    $notes,
+                                    $cocktail_tag_id
+                                ]);
+                                
+                                // Log the verification
+                                $logStmt = $pdo->prepare("
+                                    INSERT INTO verification_logs (
+                                        expert_id,
+                                        cocktail_id,
+                                        action_type,
+                                        tag_id,
+                                        cocktail_tag_id,
+                                        new_value,
+                                        notes
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                                ");
+                                
+                                $logStmt->execute([
+                                    $expert['id'],
+                                    $cocktailId,
+                                    'verify_tag',
+                                    $tagData['tag_id'],
+                                    $cocktail_tag_id,
+                                    'verified',
+                                    $notes
+                                ]);
+                                
+                                $tags_verified++;
+                                
+                            } catch (Exception $e) {
+                                error_log("Error verifying tag $cocktail_tag_id: " . $e->getMessage());
+                                $tags_failed[] = "Failed to verify tag ID $cocktail_tag_id: " . $e->getMessage();
+                            }
+                        }
+                        
+                        // Commit transaction
+                        $pdo->commit();
+                        
+                        // Update cocktail verification status
+                        $cocktailManager->updateVerificationStatus($cocktailId);
+                        
+                        if ($tags_verified > 0) {
+                            $message = "Successfully verified $tags_verified tag(s)";
+                            if (!empty($tags_failed)) {
+                                $message .= ". Issues: " . implode(", ", array_slice($tags_failed, 0, 3));
+                            }
+                            $messageType = "success";
+                        } else {
+                            throw new Exception("Failed to verify any tags: " . implode(", ", $tags_failed));
+                        }
+                        
+                        // Refresh cocktail data
+                        $cocktail = $cocktailManager->getCocktail($cocktailId);
+                        
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        throw $e;
+                    }
                     break;
                     
                 case 'add_suggested_tags':
-                    // Bulk add suggested tags
-                    $selected_tags = $_POST['selected_tags'] ?? [];
+                    // Bulk add suggested tags with validation
+                    $selected_tags = isset($_POST['selected_tags']) && is_array($_POST['selected_tags']) ? $_POST['selected_tags'] : [];
                     $tags_added = 0;
+                    $tags_failed = [];
+                    
+                    if (empty($selected_tags)) {
+                        throw new Exception("No tags selected");
+                    }
+                    
+                    // Validate required tags
+                    $weather_count = 0;
+                    $time_count = 0;
+                    $mood_count = 0;
                     
                     foreach ($selected_tags as $tag_name) {
-                        try {
-                            $categoryId = $_POST['category_' . md5($tag_name)] ?? null;
-                            $result = $tagManager->addTagToCocktail(
-                                $cocktailId, 
-                                $tag_name, 
-                                $expert['id'], 
-                                $categoryId, 
-                                90
-                            );
-                            $tags_added++;
-                        } catch (Exception $e) {
-                            error_log("Error adding tag $tag_name: " . $e->getMessage());
+                        foreach ($suggestedTags['weather'] as $t) {
+                            if ($t['name'] === $tag_name) $weather_count++;
+                        }
+                        foreach ($suggestedTags['time_of_day'] as $t) {
+                            if ($t['name'] === $tag_name) $time_count++;
+                        }
+                        foreach ($suggestedTags['mood'] as $t) {
+                            if ($t['name'] === $tag_name) $mood_count++;
                         }
                     }
                     
-                    $message = "Successfully added $tags_added suggested tags!";
-                    $messageType = "success";
-                    break;
-                    
-                case 'verify':
-                    $result = $tagManager->verifyTag($cocktailTagId, $expert['id'], $confidence, $notes);
-                    $message = $result['message'];
-                    $messageType = 'success';
-                    break;
-                    
-                case 'reject':
-                    $result = $tagManager->rejectTag($cocktailTagId, $expert['id'], $reason, $_POST['custom_reason'] ?? '', $notes);
-                    $message = $result['message'];
-                    $messageType = 'warning';
-                    break;
-                    
-                case 'add':
-                    if (empty($newTag)) {
-                        throw new Exception("Tag name is required");
+                    if ($weather_count === 0 || $time_count === 0 || $mood_count === 0) {
+                        throw new Exception("You must select at least one Weather, one Time of Day, and one Mood tag");
                     }
-                    $result = $tagManager->addTagToCocktail($cocktailId, $newTag, $expert['id'], $categoryId, $confidence);
-                    $message = $result['message'];
-                    $messageType = 'success';
-                    break;
                     
-                case 'remove':
-                    $result = $tagManager->removeTagFromCocktail($cocktailTagId, $expert['id'], $notes);
-                    $message = $result['message'];
-                    $messageType = 'warning';
+                    // Start transaction
+                    $pdo->beginTransaction();
+                    
+                    try {
+                        foreach ($selected_tags as $tag_name) {
+                            try {
+                                $tag_name = trim($tag_name);
+                                
+                                if (empty($tag_name)) {
+                                    $tags_failed[] = "Empty tag name";
+                                    continue;
+                                }
+                                
+                                // Check if tag already exists for this cocktail
+                                $checkStmt = $pdo->prepare("
+                                    SELECT ct.id FROM cocktail_tags ct
+                                    JOIN tags t ON ct.tag_id = t.id
+                                    WHERE ct.cocktail_id = ? AND t.tag_name = ?
+                                ");
+                                $checkStmt->execute([$cocktailId, $tag_name]);
+                                
+                                if ($checkStmt->fetch()) {
+                                    $tags_failed[] = "$tag_name already exists";
+                                    continue;
+                                }
+                                
+                                // Find or create tag
+                                $tagStmt = $pdo->prepare("SELECT id FROM tags WHERE tag_name = ?");
+                                $tagStmt->execute([$tag_name]);
+                                $tagRow = $tagStmt->fetch(PDO::FETCH_ASSOC);
+                                
+                                $tag_id = null;
+                                if ($tagRow) {
+                                    $tag_id = $tagRow['id'];
+                                } else {
+                                    // Create new tag
+                                    $insertTagStmt = $pdo->prepare("
+                                        INSERT INTO tags (tag_name, slug, created_by)
+                                        VALUES (?, ?, ?)
+                                    ");
+                                    $slug = strtolower(str_replace([' ', '_'], '-', $tag_name));
+                                    $insertTagStmt->execute([$tag_name, $slug, $expert['id']]);
+                                    $tag_id = $pdo->lastInsertId();
+                                }
+                                
+                                // Add tag to cocktail
+                                $addStmt = $pdo->prepare("
+                                    INSERT INTO cocktail_tags (
+                                        cocktail_id,
+                                        tag_id,
+                                        status,
+                                        source,
+                                        verified_by,
+                                        verified_at,
+                                        confidence_score,
+                                        verification_notes
+                                    ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)
+                                ");
+                                
+                                $addStmt->execute([
+                                    $cocktailId,
+                                    $tag_id,
+                                    'verified',
+                                    'expert_added',
+                                    $expert['id'],
+                                    90,
+                                    "Added by " . $expert['full_name']
+                                ]);
+                                
+                                // Log the action
+                                $logStmt = $pdo->prepare("
+                                    INSERT INTO verification_logs (
+                                        expert_id,
+                                        cocktail_id,
+                                        action_type,
+                                        tag_id,
+                                        new_value,
+                                        notes
+                                    ) VALUES (?, ?, ?, ?, ?, ?)
+                                ");
+                                
+                                $logStmt->execute([
+                                    $expert['id'],
+                                    $cocktailId,
+                                    'add_tag',
+                                    $tag_id,
+                                    $tag_name,
+                                    "Suggested tag added by " . $expert['full_name']
+                                ]);
+                                
+                                $tags_added++;
+                                
+                            } catch (Exception $e) {
+                                error_log("Error adding tag '$tag_name': " . $e->getMessage());
+                                $tags_failed[] = "Failed to add $tag_name";
+                            }
+                        }
+                        
+                        // Commit transaction
+                        $pdo->commit();
+                        
+                        // Update cocktail verification status
+                        $cocktailManager->updateVerificationStatus($cocktailId);
+                        
+                        $message = "Successfully added $tags_added suggested tag(s)";
+                        if (!empty($tags_failed)) {
+                            $message .= ". Issues: " . implode(", ", array_slice($tags_failed, 0, 3));
+                        }
+                        $messageType = "success";
+                        
+                        // Refresh cocktail data
+                        $cocktail = $cocktailManager->getCocktail($cocktailId);
+                        
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        throw $e;
+                    }
                     break;
                     
                 default:
@@ -205,6 +408,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             $message = $e->getMessage();
             $messageType = "danger";
+            error_log("Verification action error: " . $e->getMessage());
         }
     }
 }
@@ -386,15 +590,21 @@ include __DIR__ . '/../templates/header.php';
 
                 <form method="POST" action="" id="pendingTagsForm">
                     <input type="hidden" name="csrf_token" value="<?php echo generateCSRF(); ?>">
-                    <input type="hidden" name="action" value="verify_all">
+                    <input type="hidden" name="action" value="verify_pending">
                     
-                    <div class="tags-container mb-3">
+                    <div class="alert alert-info alert-sm mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <small>Select only the tags you want to verify. Unselected tags will remain pending for review.</small>
+                    </div>
+                    
+                    <div class="tags-container mb-3" id="pendingTagsContainer">
                         <?php foreach ($cocktail['pending_tags'] as $tag): ?>
-                        <label class="tag-checkbox">
+                        <label class="tag-checkbox pending-tag-item">
                             <input type="checkbox" name="pending_tags[]" value="<?php echo $tag['id']; ?>" 
-                                   class="pending-tag-checkbox">
-                            <span class="tag-pill">
+                                   class="pending-tag-checkbox" data-tag-name="<?php echo h($tag['tag_name']); ?>">
+                            <span class="tag-pill" style="cursor: pointer;">
                                 <i class="fas fa-circle-notch me-1"></i><?php echo h($tag['tag_name']); ?>
+                                <i class="fas fa-times-circle ms-2" style="font-size: 0.8em;"></i>
                             </span>
                         </label>
                         <?php endforeach; ?>
@@ -407,7 +617,7 @@ include __DIR__ . '/../templates/header.php';
                         </button>
                         <button type="submit" class="btn btn-success btn-sm w-100" 
                                 id="verifyAllBtn" disabled>
-                            <i class="fas fa-check-circle me-1"></i>Verify Selected
+                            <i class="fas fa-check-circle me-1"></i>Verify Selected (<span id="pendingCount">0</span>)
                         </button>
                     </div>
                 </form>
@@ -815,6 +1025,26 @@ include __DIR__ . '/../templates/header.php';
     background: #10B981;
     color: white;
     white-space: nowrap;
+    transition: all 0.3s ease;
+}
+
+.pending-tag-item:hover .tag-pill {
+    background: #059669;
+    transform: translateY(-2px);
+}
+
+.tag-checkbox {
+    display: contents;
+}
+
+.tag-checkbox input[type="checkbox"] {
+    display: none;
+}
+
+.tag-checkbox input[type="checkbox"]:checked + .tag-pill {
+    background: #0D9488;
+    box-shadow: 0 0 10px rgba(13, 148, 136, 0.3);
+    transform: scale(1.05);
 }
 
 .suggested-tags-header {
@@ -1062,20 +1292,36 @@ function togglePendingTags() {
     const allChecked = Array.from(checkboxes).every(cb => cb.checked);
     
     checkboxes.forEach(cb => cb.checked = !allChecked);
+    
     btn.innerHTML = allChecked ? 
         '<i class="fas fa-check-double me-1"></i>Select All' : 
         '<i class="fas fa-times me-1"></i>Deselect All';
-    updateVerifyButton();
+    
+    updatePendingCount();
 }
 
-function updateVerifyButton() {
-    const checkboxes = document.querySelectorAll('.pending-tag-checkbox:checked');
+function updatePendingCount() {
+    const checkedBoxes = document.querySelectorAll('.pending-tag-checkbox:checked');
     const btn = document.getElementById('verifyAllBtn');
-    btn.disabled = checkboxes.length === 0;
-    btn.innerHTML = checkboxes.length > 0 ? 
-        `<i class="fas fa-check-circle me-1"></i>Verify Selected (${checkboxes.length})` : 
-        '<i class="fas fa-check-circle me-1"></i>Verify Selected';
+    const countSpan = document.getElementById('pendingCount');
+    
+    const count = checkedBoxes.length;
+    countSpan.textContent = count;
+    btn.disabled = count === 0;
+    
+    if (count > 0) {
+        btn.classList.add('btn-success');
+        btn.classList.remove('btn-outline-success');
+    } else {
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-outline-success');
+    }
 }
+
+// Event listeners for pending tags
+document.querySelectorAll('.pending-tag-checkbox').forEach(cb => {
+    cb.addEventListener('change', updatePendingCount);
+});
 
 // Suggested tags validation
 function updateAddSuggestedButton() {
@@ -1105,11 +1351,6 @@ function updateAddSuggestedButton() {
     btn.style.opacity = isValid ? '1' : '0.5';
 }
 
-// Event listeners for pending tags
-document.querySelectorAll('.pending-tag-checkbox').forEach(cb => {
-    cb.addEventListener('change', updateVerifyButton);
-});
-
 // Event listeners for suggested tags
 document.querySelectorAll('.suggested-checkbox').forEach(cb => {
     cb.addEventListener('change', updateAddSuggestedButton);
@@ -1117,7 +1358,7 @@ document.querySelectorAll('.suggested-checkbox').forEach(cb => {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    updateVerifyButton();
+    updatePendingCount();
     updateAddSuggestedButton();
 });
 </script>

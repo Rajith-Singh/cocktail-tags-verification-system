@@ -72,7 +72,7 @@ class CocktailManager {
      */
     private function getVerifiedTags($cocktailId) {
         $stmt = $this->pdo->prepare("
-            SELECT t.id, t.tag_name, tc.name as category, tc.color_code,
+            SELECT ct.id, t.tag_name, tc.name as category, tc.color_code,
                    ct.confidence_score, ct.verified_by, ct.verified_at,
                    e.username as verifier_name, e.expertise_level
             FROM cocktail_tags ct
@@ -92,7 +92,7 @@ class CocktailManager {
      */
     private function getPendingTags($cocktailId) {
         $stmt = $this->pdo->prepare("
-            SELECT t.id, t.tag_name, tc.name as category, tc.color_code,
+            SELECT ct.id, t.tag_name, tc.name as category, tc.color_code,
                    ct.source, ct.created_at
             FROM cocktail_tags ct
             JOIN tags t ON ct.tag_id = t.id
