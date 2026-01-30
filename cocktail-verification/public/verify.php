@@ -348,7 +348,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     'verified',
                                     'expert_added',
                                     $expert['id'],
-                                    90,
+                                    100,
                                     "Added by " . $expert['full_name']
                                 ]);
                                 
