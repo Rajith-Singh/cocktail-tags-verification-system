@@ -64,6 +64,8 @@ $expert = isLoggedIn() ? (new Auth())->getCurrentExpert() : null;
             z-index: 100;
             overflow-y: auto;
             box-shadow: var(--card-shadow);
+            transform: translateX(0);
+            transition: transform 0.3s ease-in-out;
         }
         
         /* Main content offset when sidebar is visible */
@@ -71,11 +73,49 @@ $expert = isLoggedIn() ? (new Auth())->getCurrentExpert() : null;
             margin-left: var(--sidebar-width);
             padding-top: 0;
             min-height: calc(100vh - 56px);
+            transition: margin-left 0.3s ease-in-out;
         }
         
         /* Full width when no sidebar */
         .main-content.full-width {
             margin-left: 0;
+        }
+        
+        /* Sidebar toggle button */
+        .sidebar-toggle {
+            display: none;
+            background: var(--primary);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-right: 10px;
+        }
+        
+        .sidebar-toggle:hover {
+            background: var(--primary-dark);
+            transform: scale(1.05);
+        }
+        
+        /* Overlay for mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 99;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        .sidebar-overlay.show {
+            display: block;
+            opacity: 1;
         }
         
         .glass-card {
@@ -255,17 +295,55 @@ $expert = isLoggedIn() ? (new Auth())->getCurrentExpert() : null;
         }
         
         /* Responsive */
-        @media (max-width: 768px) {
+        @media (max-width: 992px) {
+            .sidebar-toggle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
             .sidebar {
-                width: 200px;
+                transform: translateX(-100%);
+                width: 280px;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
             }
             
             .main-content {
                 margin-left: 0;
             }
             
-            .sidebar.show {
+            .main-content.sidebar-open {
                 margin-left: 0;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 250px;
+            }
+            
+            .navbar-brand {
+                font-size: 1.2rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .sidebar {
+                width: 100%;
+                max-width: 300px;
+            }
+            
+            .sidebar {
+                right: 0;
+                left: auto;
+                transform: translateX(100%);
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
             }
         }
     </style>
@@ -275,6 +353,11 @@ $expert = isLoggedIn() ? (new Auth())->getCurrentExpert() : null;
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); z-index: 1000;">
         <div class="container-fluid">
+            <?php if (isLoggedIn() && $currentPage !== 'index.php' && $currentPage !== 'login.php' && $currentPage !== 'register.php'): ?>
+            <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar">
+                <i class="fas fa-bars"></i>
+            </button>
+            <?php endif; ?>
             <a class="navbar-brand" href="<?php echo SITE_URL; ?>dashboard.php">
                 <i class="fas fa-cocktail me-2"></i>
                 <span style="font-family: 'Playfair Display', serif; font-weight: 600;"><?php echo APP_NAME; ?></span>
@@ -318,6 +401,9 @@ $expert = isLoggedIn() ? (new Auth())->getCurrentExpert() : null;
             </div>
         </div>
     </nav>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <!-- Layout wrapper with sidebar and content -->
     <?php if (isLoggedIn() && $currentPage !== 'index.php' && $currentPage !== 'login.php' && $currentPage !== 'register.php'): ?>
@@ -409,4 +495,80 @@ $expert = isLoggedIn() ? (new Auth())->getCurrentExpert() : null;
     <?php else: ?>
         <!-- Full width for non-logged in pages -->
         <div class="main-content full-width p-4" style="margin-top: 56px;">
+    <?php endif; ?>
+
+    <?php if (isLoggedIn() && $currentPage !== 'index.php' && $currentPage !== 'login.php' && $currentPage !== 'register.php'): ?>
+    <script>
+    // Sidebar toggle functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebar = document.querySelector('.sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const mainContent = document.querySelector('.main-content');
+        
+        if (sidebarToggle && sidebar) {
+            sidebarToggle.addEventListener('click', function() {
+                toggleSidebar();
+            });
+            
+            sidebarOverlay.addEventListener('click', function() {
+                closeSidebar();
+            });
+            
+            // Close sidebar when clicking on nav links (mobile only)
+            const navLinks = document.querySelectorAll('.sidebar .nav-link');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    if (window.innerWidth <= 992) {
+                        closeSidebar();
+                    }
+                });
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 992) {
+                    closeSidebar();
+                }
+            });
+        }
+        
+        function toggleSidebar() {
+            const isOpen = sidebar.classList.contains('show');
+            
+            if (isOpen) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
+        }
+        
+        function openSidebar() {
+            sidebar.classList.add('show');
+            sidebarOverlay.classList.add('show');
+            mainContent.classList.add('sidebar-open');
+            
+            // Update toggle icon
+            if (sidebarToggle) {
+                sidebarToggle.innerHTML = '<i class="fas fa-times"></i>';
+            }
+        }
+        
+        function closeSidebar() {
+            sidebar.classList.remove('show');
+            sidebarOverlay.classList.remove('show');
+            mainContent.classList.remove('sidebar-open');
+            
+            // Update toggle icon
+            if (sidebarToggle) {
+                sidebarToggle.innerHTML = '<i class="fas fa-bars"></i>';
+            }
+        }
+        
+        // Initialize sidebar state based on screen size
+        if (window.innerWidth <= 992) {
+            closeSidebar();
+        }
+    });
+    </script>
     <?php endif; ?>

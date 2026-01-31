@@ -7,6 +7,21 @@ require_once __DIR__ . '/../includes/TagManager.php';
 
 requireLogin();
 
+/**
+ * Extract YouTube video ID from various URL formats
+ * @param string $url YouTube URL (watch, youtu.be, embed, v)
+ * @return string|null Video ID or null if invalid
+ */
+function getYouTubeVideoId($url) {
+    if (empty(trim($url ?? ''))) return null;
+    $url = trim($url);
+    // youtu.be/VIDEO_ID
+    if (preg_match('#youtu\.be/([a-zA-Z0-9_-]{11})#', $url, $m)) return $m[1];
+    // youtube.com/watch?v=VIDEO_ID or embed/VIDEO_ID or v/VIDEO_ID
+    if (preg_match('#(?:youtube\.com/watch\?v=|youtube\.com/embed/|youtube\.com/v/)([a-zA-Z0-9_-]{11})#', $url, $m)) return $m[1];
+    return null;
+}
+
 $auth = new Auth();
 $cocktailManager = new CocktailManager();
 $tagManager = new TagManager();
@@ -507,14 +522,74 @@ include __DIR__ . '/../templates/header.php';
             <div class="glass-card p-3 mb-4">
                 <?php if (!empty($cocktail['strDrinkThumb'])): ?>
                 <img src="<?php echo h($cocktail['strDrinkThumb']); ?>" 
-                     class="cocktail-image rounded" 
+                     class="cocktail-image rounded clickable-image" 
                      alt="<?php echo h($cocktail['strDrink']); ?>"
                      onerror="this.src='https://via.placeholder.com/600x400/667eea/ffffff?text=Cocktail'"
-                     style="width: 100%; height: 350px; object-fit: cover;">
+                     style="width: 100%; height: 350px; object-fit: cover; cursor: pointer;"
+                     data-bs-toggle="modal" 
+                     data-bs-target="#imagePopup"
+                     onclick="openImagePopup('<?php echo h($cocktail['strDrinkThumb']); ?>', '<?php echo h($cocktail['strDrink']); ?>')">
                 <?php else: ?>
                 <div class="cocktail-image d-flex align-items-center justify-content-center rounded" 
                      style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 350px;">
                     <i class="fas fa-glass-martini-alt fa-5x text-white"></i>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Image Popup Modal -->
+            <div class="modal fade" id="imagePopup" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header border-0">
+                            <h5 class="modal-title" id="imagePopupTitle">Cocktail Image</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-0">
+                            <div class="text-center">
+                                <img id="popupImage" src="" alt="" style="max-width: 100%; max-height: 70vh; object-fit: contain;">
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video Section -->
+            <?php 
+            $youtubeId = getYouTubeVideoId($cocktail['strVideo'] ?? '');
+            ?>
+            <div class="glass-card cocktail-video-section mb-4 overflow-hidden">
+                <?php if ($youtubeId): ?>
+                <div class="cocktail-video-header d-flex align-items-center px-4 py-2">
+                    <i class="fas fa-play-circle me-2"></i>
+                    <span class="fw-semibold">Watch How to Make It</span>
+                </div>
+                <div class="cocktail-video-wrapper">
+                    <div class="cocktail-video-container">
+                        <iframe 
+                            src="https://www.youtube.com/embed/<?php echo h($youtubeId); ?>?rel=0&modestbranding=1" 
+                            title="How to make <?php echo h($cocktail['strDrink']); ?>"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="cocktail-video-placeholder">
+                    <div class="placeholder-inner">
+                        <div class="placeholder-icon-wrapper">
+                            <i class="fas fa-video-slash"></i>
+                        </div>
+                        <h5 class="placeholder-title">No Video Tutorial Yet</h5>
+                        <p class="placeholder-subtitle">Master the craft using the recipe & instructions above. A video may be added soon!</p>
+                        <div class="placeholder-decoration">
+                            <i class="fas fa-glass-martini-alt"></i>
+                            <span>Cheers!</span>
+                        </div>
+                    </div>
                 </div>
                 <?php endif; ?>
             </div>
@@ -1005,10 +1080,156 @@ include __DIR__ . '/../templates/header.php';
     <?php endif; ?>
 </div>
 
+<!-- Image Modal -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img src="" id="modalCocktailImage" class="img-fluid" alt="Cocktail Image">
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modals for individual tag actions -->
 <?php include __DIR__ . '/../templates/modal.php'; ?>
 
 <style>
+/* Video Section Styles */
+.cocktail-video-section {
+    padding: 0 !important;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.15);
+}
+
+.cocktail-video-section:hover {
+    transform: none;
+    box-shadow: 0 15px 50px rgba(102, 126, 234, 0.2);
+}
+
+.cocktail-video-header {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+    border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+    color: var(--primary);
+}
+
+.cocktail-video-header i {
+    font-size: 1.25rem;
+}
+
+.cocktail-video-wrapper {
+    padding: 12px;
+}
+
+.cocktail-video-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%; /* 16:9 aspect ratio */
+    height: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #0d0d0d;
+}
+
+.cocktail-video-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* No Video Placeholder - Attractive Banner */
+.cocktail-video-placeholder {
+    min-height: 220px;
+    background: linear-gradient(145deg, #f8f7ff 0%, #ede9fe 35%, #e0e7ff 70%, #f5f3ff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.cocktail-video-placeholder::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 70% 70%, rgba(102, 126, 234, 0.06) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+.placeholder-inner {
+    text-align: center;
+    position: relative;
+    z-index: 1;
+}
+
+.placeholder-icon-wrapper {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(102, 126, 234, 0.2) 100%);
+    border: 2px dashed rgba(139, 92, 246, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    transition: all 0.4s ease;
+}
+
+.cocktail-video-placeholder:hover .placeholder-icon-wrapper {
+    transform: scale(1.08);
+    border-color: rgba(139, 92, 246, 0.6);
+}
+
+.placeholder-icon-wrapper i {
+    font-size: 1.75rem;
+    color: var(--primary);
+    opacity: 0.85;
+}
+
+.placeholder-title {
+    font-family: 'Playfair Display', serif;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+}
+
+.placeholder-subtitle {
+    color: #6b7280;
+    font-size: 0.95rem;
+    max-width: 320px;
+    margin: 0 auto 1rem;
+    line-height: 1.5;
+}
+
+.placeholder-decoration {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 30px;
+    font-size: 0.85rem;
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.placeholder-decoration i {
+    font-size: 0.9rem;
+}
+
 .tags-container {
     display: flex;
     flex-wrap: wrap;
@@ -1282,6 +1503,36 @@ include __DIR__ . '/../templates/header.php';
     border-radius: 12px;
     border: 1px dashed rgba(139, 92, 246, 0.2);
 }
+
+/* Image popup styles */
+.clickable-image {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.clickable-image:hover {
+    transform: scale(1.02);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+#imagePopup .modal-content {
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+#imagePopup .modal-body {
+    padding: 0;
+    background: #000;
+}
+
+#imagePopup .modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+#imagePopup .modal-footer {
+    background: #f8f9fa;
+}
 </style>
 
 <script>
@@ -1355,6 +1606,17 @@ function updateAddSuggestedButton() {
 document.querySelectorAll('.suggested-checkbox').forEach(cb => {
     cb.addEventListener('change', updateAddSuggestedButton);
 });
+
+// Image popup function
+function openImagePopup(imageSrc, cocktailName) {
+    const modal = document.getElementById('imagePopup');
+    const popupImage = document.getElementById('popupImage');
+    const modalTitle = document.getElementById('imagePopupTitle');
+    
+    popupImage.src = imageSrc;
+    popupImage.alt = cocktailName;
+    modalTitle.textContent = cocktailName;
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {

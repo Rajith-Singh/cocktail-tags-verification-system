@@ -79,7 +79,7 @@
             <div class="row">
                 <div class="col-md-8">
                     <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 0;">
-                        &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?>. All rights reserved. Built with <i class="fas fa-heart" style="color: #EF4444;"></i> for the bartender community.
+                        &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?>. All rights reserved. Owned by Tharusha Rajith Singh. Built with <i class="fas fa-heart" style="color: #EF4444;"></i> for the bartender community.
                     </p>
                 </div>
                 <div class="col-md-4 text-end">

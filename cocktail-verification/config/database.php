@@ -24,7 +24,7 @@ define('APP_NAME', 'Cocktail Tags Verification System');
 define('APP_VERSION', '1.0.0');
 define('BASE_PATH', __DIR__ . '/../');
 define('SITE_URL', getenv('SITE_URL') ?: 'http://localhost:8001/');
-define('ASSETS_PATH', SITE_URL . 'assets/');
+define('ASSETS_PATH', SITE_URL . 'cocktail-verification/assets/');
 
 // Error reporting based on environment
 if (DB_DEBUG) {
